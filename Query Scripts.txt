@@ -1,0 +1,82 @@
+/*query 1 used for first insight:(updated-second submission)*/
+select c.name as category_name,count(r.rental_id) as rental_count
+from film f
+left join film_category fg on f.film_id=fg.film_id
+left join category c on fg.category_id=c.category_id
+left join inventory i on i.film_id=f.film_id
+left join rental r on r.inventory_id=i.inventory_id
+where c.name in ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+group by category_name
+order by c.name
+
+/*query 2 used for second insight:(updated-second submission)*/
+select name as "Family Movie Category", standard_quartile, count(*) as "Total Rental Duration"
+from 
+(select f.title, c.name, f.rental_duration, 
+NTILE(4) OVER(
+		ORDER BY f.rental_duration
+	) as standard_quartile
+from film f
+left join film_category fg on f.film_id=fg.film_id
+left join category c on fg.category_id=c.category_id
+where c.name in ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')) t
+group by  name, standard_quartile
+order by  name, standard_quartile
+
+
+/*query 3 used for third insight: Question Set#2 Q2*/
+select date_trunc('month',p.payment_date) as pay_mon, 
+count(p.payment_id) as pay_countpermon, sum(p.amount) as pay_amount
+from customer c
+left join payment p on p.customer_id=c.customer_id
+where (p.payment_date BETWEEN '2007-01-01' AND '2008-01-01') and c.customer_id in (select t2.customer_id from
+(select c.customer_id, sum(p.amount)as pay_amount
+from customer c left join payment p on c.customer_id=p.customer_id
+group by c.customer_id
+ORDER BY pay_amount desc
+FETCH FIRST 10 ROW ONLY) t2) 
+group by pay_mon
+order by pay_mon
+
+
+/*query 4 used for fourth insight: Question Set#2 Q3*/
+CREATE TABLE Top_Customer_lst AS 
+select date_trunc('month',p.payment_date) as pay_mon, c.first_name || ' ' || c.last_name as fullname,
+sum(p.amount) as pay_amount
+from customer c
+left join payment p on p.customer_id=c.customer_id
+where (p.payment_date BETWEEN '2007-01-01' AND '2008-01-01') and c.customer_id in (select t2.customer_id from
+(select c.customer_id, sum(p.amount)as pay_amount
+from customer c left join payment p on c.customer_id=p.customer_id
+group by c.customer_id
+ORDER BY pay_amount desc
+FETCH FIRST 10 ROW ONLY) t2) 
+group by pay_mon, fullname
+order by fullname, pay_mon;
+
+select t1.fullname, t1.pay_mon, t1.pay_amount as current_mon_pay, t2.pay_amount as successor_mon_pay,
+(case when t2.pay_amount is null then null
+ else t2.pay_amount-t1.pay_amount
+ end) as payment_difference
+from Top_Customer_lst t1
+left join Top_Customer_lst t2
+on date_part('month',t1.pay_mon)+1=date_part('month',t2.pay_mon) and t1.fullname=t2.fullname
+order by t1.fullname, t1.pay_mon
+
+
+/*Additional feature for Query 4:if want to identify the customer name who paid the most difference in terms of payments, pls use below statement:*/
+
+select fullname from
+(select t1.fullname, t1.pay_mon, t1.pay_amount as current_mon_pay, t2.pay_amount as successor_mon_pay,
+(case when t2.pay_amount is null then null
+ else t2.pay_amount-t1.pay_amount
+ end) as payment_difference
+from Top_Customer_lst t1
+left join Top_Customer_lst t2
+on date_part('month',t1.pay_mon)+1=date_part('month',t2.pay_mon) and t1.fullname=t2.fullname
+order by t1.fullname, t1.pay_mon) t3
+where payment_difference is not null 
+order by payment_difference desc
+fetch first row only
+
+
